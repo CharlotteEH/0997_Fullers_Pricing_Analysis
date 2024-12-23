@@ -81,15 +81,16 @@ def read_in_data():
 FROM [WS_LIVE].[dbo].[vw_Epos_Weekly]
 
 WHERE
-    D_DateKey >= '2021-12-18 00:00:00.000'  -- 3 years ago
+    D_DateKey >= '2021-12-25 00:00:00.000'  -- 3 years ago
     AND OT_SL5_Novellus = 'Pub'
 	AND OT_TL4_CGA = 'London & South East'
     AND (
         (PT_ProductDescription = 'Fosters' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Carling' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
-		(PT_ProductDescription = 'Carlsberg Lager' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
+		(PT_ProductDescription = 'Carlsberg Danish Pilsner' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Amstel' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Cruzcampo' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
+		(PT_ProductDescription = 'Pravha' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Heineken Original' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'San Miguel' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Madri Excepcional' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
@@ -98,6 +99,7 @@ WHERE
 		(PT_ProductDescription = 'Birra Moretti' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Estrella Damm' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Camden Hells Lager' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
+		(PT_ProductDescription = 'Camden Town Pale Ale' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Beavertown Neck Oil Session IPA' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Tiny Rebel Easy Livin' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Brewdog Punk IPA' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
@@ -127,6 +129,7 @@ WHERE
 		(PT_ProductDescription = 'Jack Daniels' AND PM_UomDescription = '25ml') OR
 		(PT_ProductDescription = 'Johnnie Walker Black Label 12 Year Old' AND PM_UomDescription = '25ml') OR
 		(PT_ProductDescription = 'Johnnie Walker Red Label' AND PM_UomDescription = '25ml') OR
+		(PT_ProductDescription = 'Jameson' AND PM_UomDescription = '25ml') OR
 
 		(PT_ProductDescription = 'Diet Pepsi' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
 		(PT_ProductDescription = 'Pepsi' AND PM_UomDescription = 'pint' AND PT_AT_Format = 'draught') OR
@@ -396,10 +399,15 @@ def price_banding_function(products: list[str],
                         # print("result df is", "\n", result_df.head())
 
                         result_df["product_type"] = product
-                        result_df[region_column] = result_df[region_column].cat.add_categories('All')
-                        result_df[region_column] = result_df[region_column].fillna('All')
+                        result_df[region_column] = result_df[region_column].cat.add_categories('GB')
+                        result_df[region_column] = result_df[region_column].fillna('GB')
                         result_df[segment_column] = result_df[segment_column].cat.add_categories('All Pubs')
                         result_df[segment_column] = result_df[segment_column].fillna('All Pubs')
+
+                        result_df = result_df.rename(columns={region_column: "region",
+                                                              segment_column: "segment"})
+
+                        results.append(result_df)
 
             else:
                 result_df = filtered_df.groupby(list(group_columns), observed=True)["price"].quantile(
@@ -411,32 +419,41 @@ def price_banding_function(products: list[str],
 
                 result_df["product_type"] = product
 
-            results.append(result_df)
-            print("here", "\n", result_df.head())
+                results.append(result_df)
 
             group_columns = [period_column, product]
 
             if reg_seg:
-                count_df = pd.concat([
-                    filtered_df.groupby(
-                        list(group_columns) + list(combo), observed=True
-                    ).agg({outlet_column: "nunique"}).reset_index()
-                    # ,data_partner_column: "nunique"}).reset_index()
-                    for i in range(0, 3)
-                    for combo in combinations(cols_to_add_global, 2 - i)
-                    # do widest df first to make sure columns are created
-                ])  # 2-i means we start with 2, then 1 then 0.
+                for region_column in region_columns:
+                    for segment_column in segment_columns:
+                        cols_to_add_global = [region_column, segment_column]
 
-                count_df = count_df.rename(columns={product: "product",
-                                                    outlet_column: "total_outlet_count"})
+                        count_df = pd.concat([
+                            filtered_df.groupby(
+                                list(group_columns) + list(combo), observed=True
+                            ).agg({outlet_column: "nunique"}).reset_index()
+                            # ,data_partner_column: "nunique"}).reset_index()
+                            for i in range(0, 3)
+                            for combo in combinations(cols_to_add_global, 2 - i)
+                            # do widest df first to make sure columns are created
+                        ])  # 2-i means we start with 2, then 1 then 0.
 
-                # print("result df is", "\n", count_df.head())
+                        count_df = count_df.rename(columns={product: "product",
+                                                            outlet_column: "total_outlet_count"})
 
-                count_df["product_type"] = product
-                count_df[region_column] = count_df[region_column].cat.add_categories('GB')
-                count_df[region_column] = count_df[region_column].fillna('GB')
-                count_df[segment_column] = count_df[segment_column].cat.add_categories('All Pubs')
-                count_df[segment_column] = count_df[segment_column].fillna('All Pubs')
+                        # print("result df is", "\n", count_df.head())
+
+                        count_df["product_type"] = product
+                        count_df[region_column] = count_df[region_column].cat.add_categories('GB')
+                        count_df[region_column] = count_df[region_column].fillna('GB')
+                        count_df[segment_column] = count_df[segment_column].cat.add_categories('All Pubs')
+                        count_df[segment_column] = count_df[segment_column].fillna('All Pubs')
+
+                        count_df = count_df.rename(columns={region_column: "region",
+                                                            segment_column: "segment"})
+
+                        counts.append(count_df)
+
             else:
                 count_df = filtered_df.groupby(
                     list(group_columns), observed=True
@@ -449,18 +466,22 @@ def price_banding_function(products: list[str],
 
                 count_df["product_type"] = product
 
-            counts.append(count_df)
+                counts.append(count_df)
 
     final_result_df = pd.concat(results, ignore_index=True)
+    final_result_df = final_result_df.drop_duplicates()
     from pathlib import Path
 
     path = Path("H:/0997_Fullers_Pricing_Analysis/Results")
     final_result_df.to_csv(path / "test1.csv", index=False)
 
     final_count_df = pd.concat(counts, ignore_index=True)
+    final_count_df = final_count_df.drop_duplicates()
     print("final result df is", "\n", final_result_df.head())
     print("final count df is", "\n", final_count_df.head())
+    print(final_count_df["region"].unique())
     print(final_count_df["product"].unique())
+    final_count_df.to_csv(path / "test2.csv", index=False)
 
     # ^^ finding the outlet count for the whole period.  can't do it for the percentile groups because of the way im doing it
     # doing weekly percentile allocations and ros, then average over period.  outlets will be in one or more percentile groups
@@ -469,6 +490,7 @@ def price_banding_function(products: list[str],
     # find the average quantiles over the period and pivot to merge with the results later
 
     agg_dict = {quantile: 'mean' for quantile in quantiles}
+    reg_seg = [col for col in ("region", "segment") if col in final_result_df.columns]
     quantile_df = final_result_df.groupby(
         [
             period_column,
@@ -500,53 +522,65 @@ def price_banding_function(products: list[str],
     print(agg_dict2)
 
     data1 = data.copy()
-    data1[region_column] = "GB"
+    for region_column in region_columns:
+        data1[region_column] = "GB"
 
     data2 = data.copy()
-    data2[region_column] = "GB"
-    data2[segment_column] = "All Pubs"
+    for region_column in region_columns:
+        for segment_column in segment_columns:
+            data2[region_column] = "GB"
+            data2[segment_column] = "All Pubs"
 
     data3 = data.copy()
-    data3[segment_column] = "All Pubs"
+    for segment_column in segment_columns:
+        data3[segment_column] = "All Pubs"
 
     data_sets = [data, data1, data2, data3]
+    print(data.head())
+    print(final_result_df.head())
+    print(products)
 
     quantile_results = []
     for product in products:
         for data in data_sets:
-            quantile_scenarios = pd.merge(
-                final_result_df, data,
-                left_on=[date_column, period_column, "product"] + reg_seg,
-                right_on=[date_column, period_column, product] + reg_seg,
-                how="inner"
-            )
+            for region_column in region_columns:
+                for segment_column in segment_columns:
+                    print("prod, region, seg are", "\n", product, region_column, segment_column)
+                    quantile_scenarios = pd.merge(
+                        final_result_df, data,
+                        left_on=[date_column, period_column, "product", "region", "segment"],
+                        right_on=[date_column, period_column, product, region_column, segment_column],
+                        how="inner"
+                    )
+                    print("quantile scenarios before assign is", "\n", quantile_scenarios.head())
 
-            def assign_percentile(row):
-                value = row['price']
-                if value <= row[0.2]:
-                    return 0.2
-                elif value <= row[0.4]:
-                    return 0.4
-                elif value <= row[0.6]:
-                    return 0.6
-                elif value <= row[0.8]:
-                    return 0.8
-                elif value <= row[1.0]:
-                    return 1
-                else:
-                    return ''
+                    def assign_percentile(row):
+                        value = row['price']
+                        if value <= row[0.2]:
+                            return 0.2
+                        elif value <= row[0.4]:
+                            return 0.4
+                        elif value <= row[0.6]:
+                            return 0.6
+                        elif value <= row[0.8]:
+                            return 0.8
+                        elif value <= row[1.0]:
+                            return 1
+                        else:
+                            return ''
 
-            quantile_scenarios['percentile'] = quantile_scenarios.apply(assign_percentile, axis=1)
-            quantile_results.append(quantile_scenarios)
+                    quantile_scenarios['percentile'] = quantile_scenarios.apply(assign_percentile, axis=1)
+                    print("quantile scenarios after assign is", "\n", quantile_scenarios.head())
+                    quantile_results.append(quantile_scenarios)
 
     quantile_results = pd.concat(quantile_results, ignore_index=True)
     print("quantile results is", "\n", quantile_results.head())
     print(quantile_results["product"].unique())
 
-    from pathlib import Path
-
-    path = Path("H:/0997_Fullers_Pricing_Analysis/Results")
-    quantile_results.to_csv(path / "test2.csv", index=False)
+    # from pathlib import Path
+    #
+    # path = Path("H:/0997_Fullers_Pricing_Analysis/Results")
+    # quantile_results.to_csv(path / "test2.csv", index=False)
 
     # find ros for every percentile, every week, then average over period
     ros_df = quantile_results.groupby(
@@ -706,6 +740,9 @@ def price_banding_function(products: list[str],
          *metric_columns, "outlet_count", "total_outlet_count", "data_partner_count",
          "nda_data_partner_with_max_share", "nda_max_data_partner_share"]]
 
+    final_result_df = final_result_df[final_result_df["region"] != "n"]
+    final_result_df = final_result_df[final_result_df["region"] != "GB"]
+
     final_result_df = final_result_df.loc[
         (final_result_df["outlet_count"] >= 50) &
         (final_result_df["data_partner_count"] >= 3) &
@@ -725,17 +762,17 @@ def price_banding_function(products: list[str],
 
 @time_taken
 def avg_price_function(metrics: list[str],
+                       region_columns: list[str],
+                       segment_columns: list[str],
                        data: pd.DataFrame,
                        date_column: str = 'date',
                        outlet_column: str = 'outlet',
-                       region_column: str = 'region',
-                       segment_column: str = 'segment',
                        data_partner_column: str = 'data_partner'):
     data["price"] = data["value"] / data["quantity"]
 
     print("data is", "\n", data.head())
 
-    reg_seg = [col for col in (region_column, segment_column) if col in data.columns]
+    reg_seg = [col for col in region_columns + segment_columns if col in data.columns]
 
     agg_dict = {metric: 'sum' for metric in metrics}
     agg_dict[outlet_column] = 'nunique'
@@ -749,22 +786,31 @@ def avg_price_function(metrics: list[str],
     #     ] + reg_seg, observed=True
     # ).agg(agg_dict).reset_index()
     # ros_df = ros_df.rename(columns={"price": "avg_price"})
-    cols_to_add_global = reg_seg
+    ros = []
     if reg_seg:
-        ros_df = pd.concat([
-            data.groupby([
-                             date_column,
-                             "product"] + list(combo), observed=True
-                         ).agg(agg_dict).reset_index()
-            for i in range(0, 3)
-            for combo in combinations(cols_to_add_global, 2 - i)
-        ])
-        if region_column in reg_seg:
-            ros_df[region_column] = ros_df[region_column].cat.add_categories('GB')
-            ros_df[region_column] = ros_df[region_column].fillna("GB")
-        if segment_column in reg_seg:
-            ros_df[segment_column] = ros_df[segment_column].cat.add_categories('All Pubs')
-            ros_df[segment_column] = ros_df[segment_column].fillna("All Pubs")
+        for region_column in region_columns:
+            for segment_column in segment_columns:
+                cols_to_add_global = [region_column, segment_column]
+
+                ros_df = pd.concat([
+                    data.groupby([
+                                     date_column,
+                                     "product"] + list(combo), observed=True
+                                 ).agg(agg_dict).reset_index()
+                    for i in range(0, 3)
+                    for combo in combinations(cols_to_add_global, 2 - i)
+                ])
+                if region_column in reg_seg:
+                    ros_df[region_column] = ros_df[region_column].cat.add_categories('GB')
+                    ros_df[region_column] = ros_df[region_column].fillna("GB")
+                    ros_df = ros_df.rename(columns={region_column: "region"})
+                if segment_column in reg_seg:
+                    ros_df[segment_column] = ros_df[segment_column].cat.add_categories('All Pubs')
+                    ros_df[segment_column] = ros_df[segment_column].fillna("All Pubs")
+                    ros_df = ros_df.rename(columns={segment_column: "segment"})
+                ros.append(ros_df)
+        ros_df = pd.concat(ros, ignore_index=True)
+
     else:
         ros_df = data.groupby(
             [
@@ -780,6 +826,7 @@ def avg_price_function(metrics: list[str],
 
     ros_df = ros_df.rename(columns={outlet_column: "outlet_count",
                                     data_partner_column: "data_partner_count"})
+    ros_df = ros_df.drop_duplicates()
 
     for metric in metrics:
         ros_df = ros_df.rename(columns={metric: f'sum_{metric}'})
@@ -802,24 +849,34 @@ def avg_price_function(metrics: list[str],
     # dp_df = dp_df.rename(columns={"volume": "dp_volume"})
     # print("dp_df is", "\n", dp_df.head())
 
+    dp = []
     if reg_seg:
-        dp_df = pd.concat([
-            data.groupby(
-                [date_column,
-                 "product",
-                 data_partner_column
-                 ] + list(combo), observed=True
-            ).agg({"volume": "sum"}
-                  ).reset_index()
-            for i in range(0, 3)
-            for combo in combinations(cols_to_add_global, 2 - i)
-        ])
-        if region_column in reg_seg:
-            dp_df[region_column] = dp_df[region_column].cat.add_categories('GB')
-            dp_df[region_column] = dp_df[region_column].fillna("GB")
-        if segment_column in reg_seg:
-            dp_df[segment_column] = dp_df[segment_column].cat.add_categories('All Pubs')
-            dp_df[segment_column] = dp_df[segment_column].fillna("All Pubs")
+        for region_column in region_columns:
+            for segment_column in segment_columns:
+                cols_to_add_global = [region_column, segment_column]
+
+                dp_df = pd.concat([
+                    data.groupby(
+                        [date_column,
+                         "product",
+                         data_partner_column
+                         ] + list(combo), observed=True
+                    ).agg({"volume": "sum"}
+                          ).reset_index()
+                    for i in range(0, 3)
+                    for combo in combinations(cols_to_add_global, 2 - i)
+                ])
+                if region_column in reg_seg:
+                    dp_df[region_column] = dp_df[region_column].cat.add_categories('GB')
+                    dp_df[region_column] = dp_df[region_column].fillna("GB")
+                    dp_df = dp_df.rename(columns={region_column: "region"})
+                if segment_column in reg_seg:
+                    dp_df[segment_column] = dp_df[segment_column].cat.add_categories('All Pubs')
+                    dp_df[segment_column] = dp_df[segment_column].fillna("All Pubs")
+                    dp_df = dp_df.rename(columns={segment_column: "segment"})
+                dp.append(dp_df)
+        dp_df = pd.concat(dp, ignore_index=True)
+
     else:
         dp_df = data.groupby(
             [date_column,
@@ -832,6 +889,7 @@ def avg_price_function(metrics: list[str],
     print("dp_df is", "\n", dp_df.head())
     print(dp_df.tail())
     print(dp_df["product"].unique())
+    dp_df = dp_df.drop_duplicates()
 
     #
     # if reg_seg:
@@ -867,6 +925,7 @@ def avg_price_function(metrics: list[str],
     # print("total volume is", "\n", total_vol.head())
     # print(total_vol.tail())
 
+    reg_seg = [col for col in ("region", "segment") if col in dp_df.columns]
     total_vol = dp_df.groupby(
         [
             date_column,
@@ -917,6 +976,9 @@ def avg_price_function(metrics: list[str],
         [date_column, "product", *reg_seg, "avg_price", *metric_columns, "outlet_count", "data_partner_count",
          "nda_data_partner_with_max_share", "nda_max_data_partner_share"]]
 
+    results = results[results["region"] != "n"]
+    results = results[results["region"] != "GB"]
+
     results = results.loc[
         (results["outlet_count"] >= 50) &
         (results["data_partner_count"] >= 3) &
@@ -932,7 +994,10 @@ def avg_price_function(metrics: list[str],
 def main():
     group_columns = [
         'date',
-        'region',
+        'region1',
+        'region2',
+        'region3',
+        'region4',
         'segment'
     ]
 
@@ -949,10 +1014,11 @@ def main():
     # path = Path("H:/0997_Fullers_Pricing_Analysis/Code")
     # data.to_csv(path / "data.csv", index=False)
 
-    products_pint = ['Draught Fosters Pint', 'Draught Carling Pint', 'Draught Carlsberg Lager Pint', 'Draught Amstel Pint',
-                     'Draught Cruzcampo Pint', 'Draught Heineken Original Pint', 'Draught San Miguel Pint',
+    products_pint = ['Draught Fosters Pint', 'Draught Carling Pint', 'Draught Carlsberg Danish Pilsner Pint', 'Draught Amstel Pint',
+                     'Draught Cruzcampo Pint', 'Draught Pravha Pint', 'Draught Heineken Original Pint', 'Draught San Miguel Pint',
                      'Draught Madri Excepcional Pint', 'Draught Peroni Nastro Azzurro Pint', 'Draught Asahi Super Dry Pint',
                      'Draught Birra Moretti Pint', 'Draught Estrella Damm Pint',  'Draught Camden Hells Lager Pint',
+                    'Draught Camden Town Pale Ale Pint',
                      'Draught Beavertown Neck Oil Session IPA Pint',  'Draught Tiny Rebel Easy Livin Pint',
                      'Draught Brewdog Punk IPA Pint', 'Draught Guinness Pint', 'Draught Cornish Orchards Cornish Gold Cider Pint',
                      'Draught Aspall Cyder Pint', 'Draught Fullers London Pride (Cask) Pint', 'Draught Sharps Doom Bar (Cask) Pint',
@@ -960,11 +1026,11 @@ def main():
                      'Draught Diet Pepsi Pint', 'Draught Pepsi Pint', 'Draught Pepsi Max Pint', 'Draught Diet Coke Pint',
                      'Draught Coke Zero Pint',  'Draught Coca-Cola Pint']
     products_330 = ['Packaged Peroni Nastro Azzurro 330ml',  'Packaged Heineken Original 330ml', 'Packaged Sol 330ml',
-                    'Packaged Peroni Nastro Azzurro 0.0 330ml',  'Packaged Corona Extra 330ml']
+                    'Packaged Peroni Nastro Azzurro 0.0 330ml',  'Packaged Corona Extra 330ml'] #20
     products_25 = ['Tanqueray 25ml', 'Beefeater 25ml', 'Smirnoff Black 25ml', 'Smirnoff Red 25ml', 'Absolut Blue 25ml',
                    'Bacardi Carta Negra 25ml', 'Bacardi Carta Blanca 25ml', 'Kraken Black Spiced Rum 25ml',
                    'Havana Club 3 Year Old 25ml','Jack Daniels 25ml', 'Johnnie Walker Black Label 12 Year Old 25ml',
-                   'Johnnie Walker Red Label 25ml']
+                   'Johnnie Walker Red Label 25ml', 'Jameson 25ml']
     products_200 = ["Packaged Any Fever Tree Tonic 200ml"]
     products_500 = ["Packaged Any Full Alcohol Old Mout 500ml", "Packaged Any Full Alcohol Rekorderlig 500ml"]
 
@@ -996,8 +1062,8 @@ def main():
                                                    data=data,
                                                    period_column="qtr",
                                                    period_filter=[1, 5],
-                                                   region_column="region",
-                                                   segment_column="segment")
+                                                   region_columns=["region1", "region2", "region3", "region4"],
+                                                   segment_columns=["segment"])
 
     regions = prices[["region"]].drop_duplicates().reset_index(drop=True)
     segments = prices[["segment"]].drop_duplicates().reset_index(drop=True)
@@ -1013,7 +1079,10 @@ def main():
     print(prices.head())
 
     avg = avg_price_function(metrics=metrics,
-                             data=data)
+                             data=data,
+                             region_columns=["region1", "region2", "region3", "region4"],
+                             segment_columns=["segment"]
+                             )
     print(avg.head())
 
     regions = avg[["region"]].drop_duplicates().reset_index(drop=True)
